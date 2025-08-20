@@ -450,8 +450,8 @@ SELECT_GAP = 24
 total_w = SELECT_BOX_W * 2 + SELECT_GAP
 start_x = (SCREEN_WIDTH - total_w) // 2
 start_y = 120
-RED_BOX_RECT  = pygame.Rect(start_x, start_y, SELECT_BOX_W, SELECT_BOX_H)
-BLUE_BOX_RECT = pygame.Rect(start_x + SELECT_BOX_W + SELECT_GAP, start_y, SELECT_BOX_W, SELECT_BOX_H)
+RED_BOX_RECT  = pygame.Rect(start_x + SELECT_BOX_W + SELECT_GAP, start_y, SELECT_BOX_W, SELECT_BOX_H)
+BLUE_BOX_RECT = pygame.Rect(start_x, start_y, SELECT_BOX_W, SELECT_BOX_H)
 click_flash_frames = 0
 click_flash_rect = None
 

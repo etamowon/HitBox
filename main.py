@@ -2,7 +2,7 @@ import pygame
 import random
 import math
 from fighter import Fighter
-from particles import Particle
+from particles import Particle, ParticleSystem
 
 # === Setup ===
 pygame.init()
@@ -144,11 +144,82 @@ go_menu_alpha = 0   # menu fades in during STATE_GAMEOVER
 
 # === Shake ===
 shake_timer = 0
+shake_intensity = 1.0  # multiplier for shake strength
 shake_offset = [0, 0]
 
-# === Particles / Damage text ===
-particles = []
+# === Enhanced Particle System ===
+particle_system = ParticleSystem()
 damage_texts = []
+
+# === Sound System ===
+class SoundManager:
+    """Sound system with placeholder functions for future audio implementation"""
+    
+    def __init__(self):
+        self.enabled = True
+        self.volume = 0.7
+        # Initialize pygame mixer for when sounds are added
+        try:
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            self.mixer_available = True
+        except pygame.error:
+            self.mixer_available = False
+            print("Sound mixer not available")
+    
+    def play_collision(self, intensity=1.0):
+        """Play collision sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            # Placeholder: print what sound would play
+            if intensity > 1.5:
+                pass  # Would play heavy impact sound
+            else:
+                pass  # Would play normal collision sound
+    
+    def play_explosion(self):
+        """Play explosion sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play explosion sound
+    
+    def play_pickup(self, pickup_type="health"):
+        """Play pickup collection sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play pickup sound based on type
+    
+    def play_menu_select(self):
+        """Play menu selection sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play menu beep sound
+    
+    def play_menu_navigate(self):
+        """Play menu navigation sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play navigation sound
+    
+    def play_game_start(self):
+        """Play game start sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play game start fanfare
+    
+    def play_round_end(self, result="win"):
+        """Play round end sound - placeholder for future implementation"""
+        if self.enabled and self.mixer_available:
+            pass  # Would play win/lose/draw sound based on result
+    
+    def set_volume(self, volume):
+        """Set master volume (0.0 to 1.0)"""
+        self.volume = max(0.0, min(1.0, volume))
+        if self.mixer_available:
+            pygame.mixer.music.set_volume(self.volume)
+    
+    def toggle_sound(self):
+        """Toggle sound on/off"""
+        self.enabled = not self.enabled
+        return self.enabled
+
+sound_manager = SoundManager()
+
+# === Visual Feedback ===
+pickup_flashes = []  # stores (x, y, timer, color) for pickup collection flashes
 
 # === Damage Text ===
 class DamageText:
@@ -298,6 +369,19 @@ def draw_gameover_overlay(screen, progress, show_menu, menu_alpha):
                 pw,_ = ptr.get_size()
                 screen.blit(ptr, (sw//2 - iw//2 - pw - 12, start_y + i*gap))
 
+def draw_pickup_flashes(screen, offset=(0,0)):
+    """Draw expanding ring effects for pickup collection"""
+    for x, y, timer, color in pickup_flashes:
+        if timer > 0:
+            # Draw expanding ring
+            radius = int((20 - timer) * 2)  # expands as timer decreases
+            alpha = int(255 * (timer / 20))  # fades as timer decreases
+            if radius > 0 and alpha > 0:
+                # Create surface with alpha
+                ring_surf = pygame.Surface((radius*4, radius*4), pygame.SRCALPHA)
+                pygame.draw.circle(ring_surf, (*color, alpha), (radius*2, radius*2), radius, 3)
+                screen.blit(ring_surf, (x - radius*2 + offset[0], y - radius*2 + offset[1]))
+
 # === Pickups ===
 class Pickup:
     RADIUS = 14
@@ -321,7 +405,11 @@ class Pickup:
     def draw(self, screen, offset=(0,0)): raise NotImplementedError
 
 class HealthPickup(Pickup):
-    def apply(self, fighter): fighter.heal(DAMAGE)
+    def apply(self, fighter): 
+        fighter.heal(DAMAGE)
+        # Create pickup glow effect
+        particle_system.add_pickup_glow(self.cx, self.cy, (34, 197, 94))
+        
     def draw(self, screen, offset=(0,0)):
         x = self.cx + offset[0]; y = self.cy + offset[1]
         pygame.draw.circle(screen, (34,197,94), (x,y), self.RADIUS)
@@ -332,7 +420,11 @@ class HealthPickup(Pickup):
 
 class InvincibilityPickup(Pickup):
     DURATION_FRAMES = 5 * 60
-    def apply(self, fighter): fighter.grant_invincibility(self.DURATION_FRAMES)
+    def apply(self, fighter): 
+        fighter.grant_invincibility(self.DURATION_FRAMES)
+        # Create pickup glow effect
+        particle_system.add_pickup_glow(self.cx, self.cy, (255, 255, 255))
+        
     def draw(self, screen, offset=(0,0)):
         x = self.cx + offset[0]; y = self.cy + offset[1]
         palette = [(255,255,255),(255,0,0),(255,165,0),(255,255,0),
@@ -363,7 +455,7 @@ def maybe_spawn_pickup():
         pickup_spawn_cooldown = PICKUP_COOLDOWN_FRAMES
 
 def resolve_pickup_collisions():
-    global pickups
+    global pickups, pickup_flashes
     new_list = []
     for p in pickups:
         hits = p.colliding_fighters(fighter1, fighter2)
@@ -375,6 +467,26 @@ def resolve_pickup_collisions():
             target = fighter1
         else:
             target = fighter2
+        
+        # Add visual feedback for pickup collection
+        if isinstance(p, HealthPickup):
+            flash_color = (34, 197, 94)  # green for health
+            sound_manager.play_pickup("health")
+        elif isinstance(p, InvincibilityPickup):
+            flash_color = (255, 255, 255)  # white for invincibility
+            sound_manager.play_pickup("invincibility")
+        else:
+            flash_color = (255, 255, 0)  # yellow for generic pickups
+            sound_manager.play_pickup("generic")
+            
+        # Create expanding ring effect
+        pickup_flashes.append((p.cx, p.cy, 20, flash_color))
+        
+        # Add small screen shake for feedback
+        global shake_timer, shake_intensity
+        shake_timer = max(shake_timer, 4)
+        shake_intensity = max(shake_intensity, 0.5)
+        
         p.apply(target)
     pickups = new_list
 
@@ -389,8 +501,8 @@ def random_spawn():
     return x, y
 
 def reset_match():
-    global fighter1, fighter2, particles, damage_texts
-    global shake_timer, shake_offset, blurred_bg_pause
+    global fighter1, fighter2, particle_system, damage_texts
+    global shake_timer, shake_intensity, shake_offset, blurred_bg_pause
     global result_text, result_color, gameover_menu_index, f1_exploded, f2_exploded
     global go_fade_t, go_menu_alpha, pickups, pickup_spawn_cooldown
     global points_delta, delta_color, delta_count_value
@@ -402,8 +514,11 @@ def reset_match():
                        ARENA_X,ARENA_Y,ARENA_WIDTH,ARENA_HEIGHT)
     fighter1.displayed_health = health; fighter2.displayed_health = health
 
-    particles = []; damage_texts = []
-    shake_timer = 0; shake_offset = [0,0]
+    # Setup particle system with arena bounds for physics
+    particle_system.clear()
+    particle_system.set_arena_bounds(ARENA_X, ARENA_Y, ARENA_WIDTH, ARENA_HEIGHT)
+    damage_texts = []
+    shake_timer = 0; shake_intensity = 1.0; shake_offset = [0,0]
     blurred_bg_pause = None
     result_text = ""; result_color = (255,255,255)
     gameover_menu_index = 0
@@ -420,8 +535,8 @@ def reset_match():
 
 def explode_fighter(f, count=55):
     cx = int(f.x + f.width/2); cy = int(f.y + f.height/2)
-    for _ in range(count):
-        particles.append(Particle(cx, cy, f.base_color, 12, 12, lifetime=28))
+    # Enhanced explosion with varied particle types
+    particle_system.add_explosion(cx, cy, f.base_color, count)
 
 def round_winner():
     red_dead  = fighter1.health <= 0
@@ -515,14 +630,18 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if state == STATE_SPLASH:
                 if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    sound_manager.play_menu_select()
                     transition.start(24, STATE_SELECT)
 
             elif state == STATE_SELECT:
                 if event.key in (pygame.K_LEFT, pygame.K_a):
+                    sound_manager.play_menu_navigate()
                     pygame.mouse.set_pos(RED_BOX_RECT.center)
                 elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    sound_manager.play_menu_navigate()
                     pygame.mouse.set_pos(BLUE_BOX_RECT.center)
                 elif event.key in (pygame.K_ESCAPE,):
+                    sound_manager.play_menu_select()
                     transition.start(24, STATE_SPLASH)
                 elif event.key == pygame.K_RETURN:
                     mx, my = pygame.mouse.get_pos()
@@ -530,6 +649,7 @@ while running:
                         player_bet = "RED" if RED_BOX_RECT.collidepoint(mx, my) else "BLUE"
                         click_flash_rect = RED_BOX_RECT.copy() if player_bet=="RED" else BLUE_BOX_RECT.copy()
                         click_flash_frames = 8
+                        sound_manager.play_game_start()
                         transition.start(28, STATE_PLAYING)
 
             elif state == STATE_PLAYING:
@@ -541,16 +661,20 @@ while running:
 
             elif state == STATE_PAUSED:
                 if event.key == pygame.K_RETURN:
+                    sound_manager.play_menu_select()
                     choice = ["Resume","Quit"][pause_menu_index]
                     if choice == "Resume":
                         state = STATE_PLAYING; blurred_bg_pause = None
                     else:
                         running = False
                 elif event.key in (pygame.K_UP, pygame.K_w):
+                    sound_manager.play_menu_navigate()
                     pause_menu_index = (pause_menu_index - 1) % 2
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    sound_manager.play_menu_navigate()
                     pause_menu_index = (pause_menu_index + 1) % 2
                 elif event.key == pygame.K_ESCAPE:
+                    sound_manager.play_menu_select()
                     state = STATE_PLAYING; blurred_bg_pause = None
 
             elif state == STATE_GAMEOVER:
@@ -580,11 +704,16 @@ while running:
         update_health_bar_value(fighter1); update_health_bar_value(fighter2)
 
         if shake_timer > 0:
-            shake_offset[0] = random.randint(-10, 5)
-            shake_offset[1] = random.randint(-10, 5)
+            # Dynamic shake based on intensity
+            max_shake = int(8 * shake_intensity)
+            shake_offset[0] = random.randint(-max_shake, max_shake)
+            shake_offset[1] = random.randint(-max_shake, max_shake)
             shake_timer -= 1
+            # Intensity decreases over time for natural feel
+            shake_intensity *= 0.9
         else:
             shake_offset = [0, 0]
+            shake_intensity = 1.0
 
         # Pickups
         if state == STATE_PLAYING:
@@ -596,7 +725,7 @@ while running:
             for pk in pickups: pk.update()
             pickups[:] = [pk for pk in pickups if not pk.dead]
 
-        # Collisions (damage only if >0; invincibility blocks)
+        # Enhanced Collisions with better visual feedback
         if state == STATE_PLAYING and fighter1.collides_with(fighter2):
             fighter1.dx *= -1; fighter1.dy *= -1
             fighter2.dx *= -1; fighter2.dy *= -1
@@ -605,27 +734,45 @@ while running:
             dmg2 = fighter2.take_damage(DAMAGE)
 
             if (dmg1 > 0) or (dmg2 > 0):
-                shake_timer = 10
+                # Dynamic shake intensity based on total damage dealt
+                total_damage = dmg1 + dmg2
+                shake_timer = 8 + min(12, total_damage // 5)  # longer shake for more damage
+                shake_intensity = 1.0 + (total_damage / 20.0)  # stronger shake for more damage
+                
+                # Play collision sound with intensity
+                sound_manager.play_collision(shake_intensity)
+                
                 overlap = fighter1.get_rect().clip(fighter2.get_rect())
                 if overlap.width > 0 and overlap.height > 0:
                     cx, cy = overlap.center
-                    for _ in range(12):
-                        particles.append(Particle(cx, cy, (255,255,255), 10,10, lifetime=18))
+                    # Enhanced collision effects
+                    particle_system.add_collision_sparks(cx, cy, 12)
+                    particle_system.add_explosion(cx, cy, (255, 255, 255), 8)
+                    
                 if dmg1 > 0:
                     damage_texts.append(DamageText(fighter1.x+fighter1.width/2, fighter1.y-6, dmg1, (255,120,120)))
+                    # Add damage sparks around fighter1
+                    particle_system.add_damage_sparks(fighter1.x+fighter1.width/2, fighter1.y+fighter1.height/2, (255,120,120))
                 if dmg2 > 0:
                     damage_texts.append(DamageText(fighter2.x+fighter2.width/2, fighter2.y-6, dmg2, (120,170,255)))
+                    # Add damage sparks around fighter2
+                    particle_system.add_damage_sparks(fighter2.x+fighter2.width/2, fighter2.y+fighter2.height/2, (120,170,255))
 
-        for p in particles: p.update()
-        particles = [p for p in particles if not p.dead]
+        # Update particle system and damage texts
+        particle_system.update()
         for dt in damage_texts: dt.update()
         damage_texts = [dt for dt in damage_texts if not dt.dead]
+        
+        # Update pickup flashes
+        pickup_flashes = [(x, y, timer-1, color) for x, y, timer, color in pickup_flashes if timer > 0]
 
         # deaths -> transition to GAMEOVER with scoring prep
         if state == STATE_PLAYING:
             if fighter1.health <= 0 and not f1_exploded:
+                sound_manager.play_explosion()
                 explode_fighter(fighter1); f1_exploded = True
             if fighter2.health <= 0 and not f2_exploded:
+                sound_manager.play_explosion()
                 explode_fighter(fighter2); f2_exploded = True
             if (fighter1.health <= 0) or (fighter2.health <= 0):
                 win = round_winner()
@@ -700,7 +847,13 @@ while running:
         if fighter2 and fighter2.health > 0: fighter2.draw(screen, shake_offset)
 
         for pk in pickups: pk.draw(screen, shake_offset)
-        for p in particles: p.draw(screen, shake_offset)
+        
+        # Draw enhanced particle system
+        particle_system.draw(screen, shake_offset)
+        
+        # Draw pickup collection flashes
+        draw_pickup_flashes(screen, shake_offset)
+        
         for dt in damage_texts: dt.draw(screen, shake_offset)
 
         # HUD

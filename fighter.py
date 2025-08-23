@@ -28,6 +28,12 @@ class Fighter:
         self.hurt_timer = 0
         self.hurt_flash_frames = 8
         self.blink_period = 4
+        
+        # Movement trails
+        self.trail_positions = []  # stores (x, y, age) tuples
+        self.max_trail_length = 8
+        self.trail_spacing = 3  # add trail point every N frames
+        self.trail_counter = 0
 
     def move(self):
         self.x += self.dx
@@ -50,6 +56,19 @@ class Fighter:
             self.invincible = True
         else:
             self.invincible = False
+            
+        # Update trail positions
+        self.trail_counter += 1
+        if self.trail_counter >= self.trail_spacing:
+            # Add current position to trail
+            center_x = self.x + self.width // 2
+            center_y = self.y + self.height // 2
+            self.trail_positions.append((center_x, center_y, 0))
+            self.trail_counter = 0
+            
+        # Age existing trail points and remove old ones
+        self.trail_positions = [(x, y, age + 1) for x, y, age in self.trail_positions 
+                               if age < self.max_trail_length]
 
     def _invincible_color(self):
         # Simple Mario-style cycling
@@ -69,6 +88,10 @@ class Fighter:
         return palette[idx]
 
     def draw(self, screen, offset=(0, 0)):
+        # Draw trail first (behind fighter)
+        self._draw_trail(screen, offset)
+        
+        # Determine fighter color
         if self.invincible:
             color = self._invincible_color()
         elif self.hurt_timer > 0 and (self.hurt_timer % self.blink_period) < (self.blink_period // 2):
@@ -76,11 +99,33 @@ class Fighter:
         else:
             color = self.base_color
 
+        # Draw fighter
         pygame.draw.rect(
             screen,
             color,
             (self.x + offset[0], self.y + offset[1], self.width, self.height)
         )
+        
+    def _draw_trail(self, screen, offset=(0, 0)):
+        """Draw the movement trail behind the fighter"""
+        for i, (x, y, age) in enumerate(self.trail_positions):
+            # Calculate alpha/size based on age (older = more transparent/smaller)
+            alpha = max(0, 255 - (age * 32))  # fade out over time
+            size = max(2, self.width // 2 - age * 2)  # shrink over time
+            
+            if alpha <= 0:
+                continue
+                
+            # Create a darker version of the fighter's color for the trail
+            trail_color = tuple(max(0, int(c * 0.6)) for c in self.base_color)
+            
+            # Create surface with alpha for trail segment
+            trail_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            trail_surf.fill((*trail_color, alpha))
+            
+            # Draw trail segment centered on position
+            screen.blit(trail_surf, 
+                       (x - size // 2 + offset[0], y - size // 2 + offset[1]))
 
     def get_rect(self):
         return pygame.Rect(self.x, self.y, self.width, self.height)

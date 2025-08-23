@@ -65,7 +65,7 @@ This project was created as a way to **teach myself Python** while building some
 
 ---
 
-## 📷 Screenshots & Gameplay
+## 📷 Gameplay
 
 
 ![Gameplay Demo](assets/screenshots/hitbox_demo.gif) 

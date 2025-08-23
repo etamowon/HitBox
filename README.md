@@ -70,11 +70,6 @@ This project was created as a way to **teach myself Python** while building some
 
 ![Gameplay Demo](assets/screenshots/hitbox_demo.gif) 
 
-![Gameplay Screenshot 1](assets/screenshots/gameplay1.png) 
-
-![Gameplay Screenshot 2](assets/screenshots/gameplay2.png)  
-
-
 > 📌 A short **GIF or video clip** showing collisions, particles, and screen shake will quickly grab attention from recruiters.
 
 ---

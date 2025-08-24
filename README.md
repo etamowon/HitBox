@@ -7,6 +7,15 @@ This project was created as a way to **teach myself Python** while building some
 
 ---
 
+## 🎮 Download & Play
+
+➡ [**Download HitBox v1.0 (Windows)**](https://github.com/etamowon/HitBox/releases/latest/download/HitBox_v1.0.zip)
+
+> 📦 Just unzip the folder and run **HitBox.exe** — no Python installation needed.  
+> 💻 Source code is available below for recruiters, devs, and contributors.
+
+---
+
 ## 💼 Why Recruiters Should Care
 
 - Demonstrates **object-oriented programming** through well-structured game entities (`Fighter`, `Particle`, `DamageText`, `Pickup`).  

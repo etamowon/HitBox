@@ -176,7 +176,7 @@ This project highlights my ability to **learn independently**, **design complex 
 
 ---
 
-## 🚀 Future Improvements
+## 🚀 Possible Future Improvements
 
 - **Audio Integration**: Sound effects and background music using the built-in sound manager
 - **AI Fighters**: Computer-controlled opponents with different fighting styles  
